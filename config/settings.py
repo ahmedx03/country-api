@@ -20,9 +20,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fmm$38k42sunz6b0#_40y!5r#icg0hng18y)zwjt7_$g3j6em=')
 
-# Auto-detect environment
-IS_RAILWAY = os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('DATABASE_URL') or os.getenv('PORT')
-DEBUG = not IS_RAILWAY
+# MANUALLY FORCE PRODUCTION SETTINGS
+IS_RAILWAY = True  # Force Railway mode
+DEBUG = False
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -73,27 +73,30 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# DATABASE CONFIGURATION - FINAL WORKING VERSION
-if os.getenv('DATABASE_URL'):
-    # Use PostgreSQL on Railway
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=os.getenv('DATABASE_URL'),
-            conn_max_age=600,
-            ssl_require=True
-        )
+# DATABASE CONFIGURATION - FORCE POSTGRESQL
+print("=== FORCING POSTGRESQL CONFIGURATION ===")
+
+# Get PostgreSQL connection details directly
+pg_host = os.getenv('PGHOST', 'localhost')
+pg_database = os.getenv('PGDATABASE', 'railway')
+pg_user = os.getenv('PGUSER', 'postgres')
+pg_password = os.getenv('PGPASSWORD', '')
+pg_port = os.getenv('PGPORT', '5432')
+
+print(f"PostgreSQL Config: {pg_host}:{pg_port}, Database: {pg_database}")
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': pg_database,
+        'USER': pg_user,
+        'PASSWORD': pg_password,
+        'HOST': pg_host,
+        'PORT': pg_port,
     }
-    print("SUCCESS: Using PostgreSQL on Railway via DATABASE_URL")
-else:
-    # Fallback to SQLite for local development
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
-    print("Using SQLite for local development")
+}
+
+print("USING POSTGRESQL - NO SQLITE FALLBACK")
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -132,8 +135,8 @@ REST_FRAMEWORK = {
     ],
 }
 
-if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+# Production security settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
