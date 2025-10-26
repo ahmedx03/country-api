@@ -26,7 +26,12 @@ SECRET_KEY = 'django-insecure-fmm$38k42sunz6b0#_40y!5r#icg0hng18y)zwjt7_$g3j6em=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.railway.app',
+    '.up.railway.app',
+]
 
 
 # Application definition
@@ -43,6 +48,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -82,6 +88,14 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Railway production database (only when DATABASE_URL exists)
+if os.getenv('DATABASE_URL'):
+    try:
+        import dj_database_url
+        DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
+    except ImportError:
+        pass
 
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
@@ -124,9 +138,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, '../staticfiles')
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = os.path.join(BASE_DIR, '../media')
 
 CACHE_DIR = os.path.join(BASE_DIR, 'cache')
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -135,3 +149,10 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Production security (only when not in DEBUG mode)
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
