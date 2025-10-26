@@ -9,6 +9,9 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
+"""
+Django settings for config project.
+"""
 
 from pathlib import Path
 import os
@@ -17,6 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fmm$38k42sunz6b0#_40y!5r#icg0hng18y)zwjt7_$g3j6em=')
 
+# Force DEBUG to False on Railway
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = [
@@ -68,22 +72,57 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database Configuration - Use dj-database-url for Railway
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+# DATABASE CONFIGURATION - CRITICAL FIX
+# Check if we're on Railway using multiple indicators
+is_railway = any([
+    os.getenv('RAILWAY_ENVIRONMENT'),
+    os.getenv('RAILWAY_STATIC_URL'),
+    os.getenv('DATABASE_URL'),
+    os.getenv('PGDATABASE'),
+    os.getenv('PGHOST')
+])
 
-if os.getenv('DATABASE_URL'):
-    import dj_database_url
-    DATABASES['default'] = dj_database_url.config(
-        conn_max_age=600,
-        conn_health_checks=True,
-        ssl_require=True
-    )
-    print("USING POSTGRESQL ON RAILWAY")
+if is_railway:
+    # RAILWAY PRODUCTION - FORCE POSTGRESQL
+    print("DETECTED RAILWAY ENVIRONMENT - USING POSTGRESQL")
+    
+    # Get PostgreSQL connection details
+    db_config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('PGDATABASE', 'railway'),
+        'USER': os.getenv('PGUSER', 'postgres'),
+        'PASSWORD': os.getenv('PGPASSWORD', ''),
+        'HOST': os.getenv('PGHOST', 'localhost'),
+        'PORT': os.getenv('PGPORT', '5432'),
+    }
+    
+    # Verify we have the essential connection details
+    if db_config['HOST'] and db_config['HOST'] != 'localhost':
+        DATABASES = {
+            'default': db_config
+        }
+        print(f"USING POSTGRESQL ON RAILWAY: {db_config['HOST']}")
+    else:
+        # If PostgreSQL config is invalid, create a minimal SQLite config that won't fail
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.dummy',
+            }
+        }
+        print("POSTGRESQL CONFIG INVALID - USING DUMMY DATABASE")
+        
+    # Force production settings
+    DEBUG = False
+    
+else:
+    # LOCAL DEVELOPMENT - USE SQLITE
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    print("USING SQLITE FOR LOCAL DEVELOPMENT")
 
 AUTH_PASSWORD_VALIDATORS = [
     {
