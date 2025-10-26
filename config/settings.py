@@ -20,7 +20,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fmm$38k42sunz6b0#_40y!5r#icg0hng18y)zwjt7_$g3j6em=')
 
-# Force DEBUG to False on Railway
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = [
@@ -72,50 +71,40 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# DATABASE CONFIGURATION - CRITICAL FIX
-# Check if we're on Railway using multiple indicators
-is_railway = any([
-    os.getenv('RAILWAY_ENVIRONMENT'),
-    os.getenv('RAILWAY_STATIC_URL'),
-    os.getenv('DATABASE_URL'),
-    os.getenv('PGDATABASE'),
-    os.getenv('PGHOST')
-])
-
-if is_railway:
-    # RAILWAY PRODUCTION - FORCE POSTGRESQL
-    print("DETECTED RAILWAY ENVIRONMENT - USING POSTGRESQL")
-    
-    # Get PostgreSQL connection details
-    db_config = {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('PGDATABASE', 'railway'),
-        'USER': os.getenv('PGUSER', 'postgres'),
-        'PASSWORD': os.getenv('PGPASSWORD', ''),
-        'HOST': os.getenv('PGHOST', 'localhost'),
-        'PORT': os.getenv('PGPORT', '5432'),
+# DATABASE CONFIGURATION
+# Primary method: Use DATABASE_URL if available (Railway provides this)
+if os.getenv('DATABASE_URL'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_URL'),
+            conn_max_age=600,
+            ssl_require=True
+        )
     }
-    
-    # Verify we have the essential connection details
-    if db_config['HOST'] and db_config['HOST'] != 'localhost':
-        DATABASES = {
-            'default': db_config
+    print("USING POSTGRESQL VIA DATABASE_URL ON RAILWAY")
+
+# Fallback method: Use individual PostgreSQL variables
+elif all([
+    os.getenv('PGHOST'),
+    os.getenv('PGDATABASE'), 
+    os.getenv('PGUSER'),
+    os.getenv('PGPASSWORD')
+]):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('PGDATABASE'),
+            'USER': os.getenv('PGUSER'),
+            'PASSWORD': os.getenv('PGPASSWORD'),
+            'HOST': os.getenv('PGHOST'),
+            'PORT': os.getenv('PGPORT', '5432'),
         }
-        print(f"USING POSTGRESQL ON RAILWAY: {db_config['HOST']}")
-    else:
-        # If PostgreSQL config is invalid, create a minimal SQLite config that won't fail
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.dummy',
-            }
-        }
-        print("POSTGRESQL CONFIG INVALID - USING DUMMY DATABASE")
-        
-    # Force production settings
-    DEBUG = False
-    
+    }
+    print("USING POSTGRESQL WITH INDIVIDUAL ENV VARIABLES")
+
+# Final fallback: Use SQLite for local development
 else:
-    # LOCAL DEVELOPMENT - USE SQLITE
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
