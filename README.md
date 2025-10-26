@@ -83,16 +83,6 @@ curl http://localhost:8000/countries/image -o summary.png
 - **Image Processing**: Pillow
 - **External APIs**: REST Countries, Exchange Rate API
 
-## Testing
-
-```bash
-# Run comprehensive tests
-.\final_verification.ps1
-
-# Quick smoke test
-.\clean_test.ps1
-```
-
 ## Deployment
 
 ### Environment Variables
