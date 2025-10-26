@@ -20,9 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fmm$38k42sunz6b0#_40y!5r#icg0hng18y)zwjt7_$g3j6em=')
 
-# MANUALLY FORCE PRODUCTION SETTINGS
-IS_RAILWAY = True  # Force Railway mode
-DEBUG = False
+DEBUG = False  # Always production on Railway
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -73,31 +71,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# DATABASE CONFIGURATION - FORCE POSTGRESQL
-print("=== FORCING POSTGRESQL CONFIGURATION ===")
+# DATABASE CONFIGURATION - MANUAL SETUP REQUIRED
+print("=== DATABASE SETUP ===")
+print("If you see this, you need to manually add PostgreSQL environment variables in Railway")
 
-# Get PostgreSQL connection details directly
-pg_host = os.getenv('PGHOST', 'localhost')
-pg_database = os.getenv('PGDATABASE', 'railway')
-pg_user = os.getenv('PGUSER', 'postgres')
-pg_password = os.getenv('PGPASSWORD', '')
-pg_port = os.getenv('PGPORT', '5432')
-
-print(f"PostgreSQL Config: {pg_host}:{pg_port}, Database: {pg_database}")
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': pg_database,
-        'USER': pg_user,
-        'PASSWORD': pg_password,
-        'HOST': pg_host,
-        'PORT': pg_port,
+if os.getenv('DATABASE_URL'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_URL'),
+            conn_max_age=600,
+            ssl_require=True
+        )
     }
-}
+    print("SUCCESS: Using DATABASE_URL")
+else:
+    print("ERROR: No DATABASE_URL found")
+    print("Please add PostgreSQL connection variables in Railway dashboard")
+    # This will fail but show clear error
+    raise Exception("PostgreSQL configuration missing. Add DATABASE_URL environment variable.")
 
-print("USING POSTGRESQL - NO SQLITE FALLBACK")
-
+# Rest of your settings...
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -135,7 +129,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-# Production security settings
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
