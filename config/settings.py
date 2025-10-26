@@ -20,10 +20,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fmm$38k42sunz6b0#_40y!5r#icg0hng18y)zwjt7_$g3j6em=')
 
-# Detect Railway environment
-IS_RAILWAY = 'RAILWAY' in os.environ or 'DATABASE_URL' in os.environ
+# MANUALLY FORCE PRODUCTION SETTINGS ON RAILWAY
+# Check multiple Railway-specific environment variables
+IS_RAILWAY = any([
+    os.getenv('RAILWAY_ENVIRONMENT'),
+    os.getenv('RAILWAY_STATIC_URL'),
+    os.getenv('RAILWAY_GIT_COMMIT_SHA'),
+    os.getenv('DATABASE_URL'),
+    os.getenv('PGHOST'),
+    os.getenv('PGDATABASE'),
+    os.getenv('PGUSER'),
+    os.getenv('PGPASSWORD'),
+    os.getenv('PORT')  # Railway always sets PORT
+])
 
-DEBUG = not IS_RAILWAY  # Auto-disable debug on Railway
+DEBUG = not IS_RAILWAY
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -74,76 +85,47 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# DATABASE CONFIGURATION - CRITICAL FIX
+# DATABASE CONFIGURATION - EXPLICITLY FORCE POSTGRESQL ON RAILWAY
+print("=== DATABASE CONFIGURATION ===")
+print(f"PORT: {os.getenv('PORT')}")
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
+print(f"PGHOST: {os.getenv('PGHOST')}")
+print(f"PGDATABASE: {os.getenv('PGDATABASE')}")
+
 if IS_RAILWAY:
-    # FORCE POSTGRESQL ON RAILWAY - NO FALLBACK TO SQLITE
-    print("RAILWAY ENVIRONMENT DETECTED - CONFIGURING POSTGRESQL")
+    print("CONFIGURING FOR RAILWAY PRODUCTION")
     
-    # Method 1: Use DATABASE_URL with dj-database-url
-    database_url = os.getenv('DATABASE_URL')
-    if database_url:
-        try:
-            import dj_database_url
-            DATABASES = {
-                'default': dj_database_url.parse(database_url, conn_max_age=600)
-            }
-            print("SUCCESS: Using PostgreSQL via DATABASE_URL")
-        except Exception as e:
-            print(f"ERROR with DATABASE_URL: {e}")
-            # Continue to method 2
+    # ALWAYS USE POSTGRESQL ON RAILWAY - NO EXCEPTIONS
+    # Get PostgreSQL connection details directly from environment
+    pg_config = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('PGDATABASE', 'railway'),
+        'USER': os.getenv('PGUSER', 'postgres'),
+        'PASSWORD': os.getenv('PGPASSWORD', ''),
+        'HOST': os.getenv('PGHOST', 'localhost'),
+        'PORT': os.getenv('PGPORT', '5432'),
+    }
     
-    # Method 2: Use individual PostgreSQL environment variables
-    if 'DATABASES' not in locals() or not DATABASES.get('default'):
-        pg_host = os.getenv('PGHOST')
-        pg_database = os.getenv('PGDATABASE')
-        pg_user = os.getenv('PGUSER')
-        pg_password = os.getenv('PGPASSWORD')
-        
-        if all([pg_host, pg_database, pg_user, pg_password]):
-            DATABASES = {
-                'default': {
-                    'ENGINE': 'django.db.backends.postgresql',
-                    'NAME': pg_database,
-                    'USER': pg_user,
-                    'PASSWORD': pg_password,
-                    'HOST': pg_host,
-                    'PORT': os.getenv('PGPORT', '5432'),
-                }
-            }
-            print(f"SUCCESS: Using PostgreSQL with individual env vars - Host: {pg_host}")
-        else:
-            # If we can't configure PostgreSQL, raise an error instead of falling back to SQLite
-            missing_vars = []
-            if not pg_host: missing_vars.append('PGHOST')
-            if not pg_database: missing_vars.append('PGDATABASE')
-            if not pg_user: missing_vars.append('PGUSER')
-            if not pg_password: missing_vars.append('PGPASSWORD')
-            
-            error_msg = f"PostgreSQL configuration incomplete. Missing: {', '.join(missing_vars)}"
-            print(f"CRITICAL ERROR: {error_msg}")
-            
-            # Create a minimal PostgreSQL config that will fail gracefully
-            DATABASES = {
-                'default': {
-                    'ENGINE': 'django.db.backends.postgresql',
-                    'NAME': 'railway',
-                    'USER': 'postgres',
-                    'PASSWORD': '',
-                    'HOST': 'localhost',
-                    'PORT': '5432',
-                }
-            }
-            print("WARNING: Using placeholder PostgreSQL config - migrations may fail")
+    print(f"PostgreSQL Config: {pg_config['HOST']}:{pg_config['PORT']}")
+    
+    DATABASES = {
+        'default': pg_config
+    }
+    
+    # Verify the configuration
+    if not pg_config['HOST'] or pg_config['HOST'] == 'localhost':
+        print("WARNING: PGHOST is localhost or empty - this may not work on Railway")
+    else:
+        print("SUCCESS: PostgreSQL configuration loaded")
 
 else:
-    # LOCAL DEVELOPMENT - USE SQLITE
+    print("CONFIGURING FOR LOCAL DEVELOPMENT")
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-    print("LOCAL DEVELOPMENT: Using SQLite")
 
 AUTH_PASSWORD_VALIDATORS = [
     {
